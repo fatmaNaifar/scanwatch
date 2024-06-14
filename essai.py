@@ -56,9 +56,11 @@ class WithingsAPI:
 
         self.access_token = response_json['body']['access_token']
         self.refresh_token = response_json['body']['refresh_token']
-        self.expires_in = response_json['body']['expires_in']
+        self.expires_in = datetime.utcnow().timestamp() + response_json['body']['expires_in']
 
     def is_token_expired(self):
+        if not self.expires_in:
+            return True
         expiration_datetime = datetime.utcfromtimestamp(self.expires_in)
         current_time = datetime.utcnow()
         return current_time >= expiration_datetime
@@ -77,10 +79,18 @@ class WithingsAPI:
         if response.status_code == 200:
             data = response.json()
             self.access_token = data['body']['access_token']
-            self.expires_in = data['body']['expires_in']
+            self.expires_in = datetime.utcnow().timestamp() + data['body']['expires_in']
         else:
             raise Exception(f"Error: {response.status_code} - {response.text}")
 
+def save_user_data(email, access_token, refresh_token, expires_in):
+    ref = db.reference(f'/users/{email.replace(".", "_")}')
+    ref.child('access_token').set(access_token)
+    ref.child('refresh_token').set(refresh_token)
+    ref.child('expires_in').set(expires_in)
+def get_user_data(email):
+    ref = db.reference(f'/users/{email.replace(".", "_")}')
+    return ref.get()
 @app.route('/')
 def index():
     global authorization_code
@@ -112,20 +122,29 @@ def process_withings_data():
         withings_api.request_access_token(authorization_code)
         if withings_api.is_token_expired():
             withings_api.refresh_access_token()
-        fetch_withings_data()
-        # If you want to subscribe to notifications, uncomment the line below and provide a valid callback URL
-        # withings_api.subscribe_to_notifications(NOTIFY_CALLBACK_URL, 1)
+        save_user_data(email, withings_api.access_token, withings_api.refresh_token, withings_api.expires_in)
+        fetch_withings_data(email)
     except Exception as e:
         print(f"An error occurred during Withings data processing: {e}")
 
-def fetch_withings_data():
-    if not withings_api.access_token:
-        print("Access token is not available.")
+def fetch_withings_data(email):
+    user_data = get_user_data(email)
+    if not user_data:
+        print("No user data found for this email.")
         return
-    ref = db.reference(f'/users/{email.replace(".", "_")}') if email else None
-    if not email:
-        print("Email is not set.")
-        return
+
+    access_token = user_data['access_token']
+    refresh_token = user_data['refresh_token']
+    expires_in = user_data['expires_in']
+
+    if withings_api.is_token_expired():
+        withings_api.refresh_access_token()
+
+    fetch_and_store_user_data(email, access_token)
+
+def fetch_and_store_user_data(email, access_token):
+    ref = db.reference(f'/users/{email.replace(".", "_")}')
+    headers = {'Authorization': 'Bearer ' + access_token}
 
     # GET MEASURES
     url = 'https://wbsapi.withings.net/measure'
@@ -211,7 +230,7 @@ def fetch_withings_data():
                      'heart_rate.value': 'heart_rate'}).dropna()
 
         # Split data into smaller chunks
-        chunk_size = 5 # Adjust chunk size if necessary
+        chunk_size = 5  # Adjust chunk size if necessary
         for start in range(0, len(df_ECG_record), chunk_size):
             chunk = df_ECG_record[start:start + chunk_size]
             ECG_dict = chunk.to_dict(orient='records')
@@ -222,11 +241,16 @@ def fetch_withings_data():
         print(response_list.text)
 
 def job():
-    print("Fetching Withings data...")
-    fetch_withings_data()
+    users_ref = db.reference('/users')
+    users = users_ref.get()
+    if users:
+        for email, user_data in users.items():
+            print(f"Fetching data for {email}")
+            fetch_withings_data(email)
 
 # Schedule the job to run every 2 minutes
-schedule.every(2).minutes.do(job)
+schedule.every(1).minutes.do(job)
+
 def scheduler_thread():
     while True:
         schedule.run_pending()
