@@ -1,22 +1,23 @@
 import pandas as pd
 import requests
-import firebase_admin
-from firebase_admin import credentials, db
 from datetime import datetime
 from flask import Flask, request, jsonify, redirect, url_for, render_template
 import threading
 import schedule
 import time
+from rethinkdb import RethinkDB
+r = RethinkDB()
 
 # Withings API credentials
 CLIENT_ID = '36eff5960dbee78d215040ff5cdc737edc2c6f6a8e12e6e24a6a699258be466d'
 CLIENT_SECRET = 'f57f5bf2b8052719bc691b78d9d23631b9ddcce2b41d2f133daf62b64cd4182a'
 REDIRECT_URI = 'http://localhost:3200'
 STATE = '11136964'
-cred = credentials.Certificate('credentials/healthy-676e4-firebase-adminsdk-9y97l-61149810fd.json')
-firebase_admin.initialize_app(cred, {'databaseURL': 'https://healthy-676e4-default-rtdb.firebaseio.com'})
 
-
+# Connect to RethinkDB
+conn = r.connect(host='localhost',
+                 port=28015,
+                 db='healthy')
 app = Flask(__name__)
 withings_api = None
 authorization_code = None
@@ -78,19 +79,26 @@ class WithingsAPI:
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
             data = response.json()
-            self.access_token = data['body']['access_token']
-            self.expires_in = datetime.utcnow().timestamp() + data['body']['expires_in']
+            if 'body' in data:
+                self.access_token = data['body']['access_token']
+                self.expires_in = datetime.utcnow().timestamp() + data['body']['expires_in']
+            else:
+                raise Exception(f"Error: No 'body' in response - {data}")
         else:
             raise Exception(f"Error: {response.status_code} - {response.text}")
 
+
 def save_user_data(email, access_token, refresh_token, expires_in):
-    ref = db.reference(f'/users/{email.replace(".", "_")}')
-    ref.child('access_token').set(access_token)
-    ref.child('refresh_token').set(refresh_token)
-    ref.child('expires_in').set(expires_in)
+    r.table("users").insert({
+        'id': email,
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'expires_in': expires_in
+    }).run(conn)
+
 def get_user_data(email):
-    ref = db.reference(f'/users/{email.replace(".", "_")}')
-    return ref.get()
+    return r.table('users').get(email).run(conn)
+
 @app.route('/')
 def index():
     global authorization_code
@@ -143,7 +151,6 @@ def fetch_withings_data(email):
     fetch_and_store_user_data(email, access_token)
 
 def fetch_and_store_user_data(email, access_token):
-    ref = db.reference(f'/users/{email.replace(".", "_")}')
     headers = {'Authorization': 'Bearer ' + access_token}
 
     # GET MEASURES
@@ -165,9 +172,8 @@ def fetch_and_store_user_data(email, access_token):
     df_measures = pd.json_normalize(measures_list)
     df_SPO2 = df_measures[df_measures['type'] == 54].copy()
     SPO2_data = df_SPO2[["value"]]
-    SPO2_dict = SPO2_data.to_dict(orient='index')
-    SPO2 = ref.child('SPO2')
-    SPO2.set(SPO2_dict)
+    SPO2_dict = {str(k): v for k, v in SPO2_data.to_dict(orient='index').items()}
+    r.table('users').get(email).update({'SPO2': SPO2_dict}).run(conn)
 
     # ACTIVITIES
     url = 'https://wbsapi.withings.net/v2/measure'
@@ -191,9 +197,8 @@ def fetch_and_store_user_data(email, access_token):
     df = pd.json_normalize(activities_data)
     heart_rate_avg = df[["hr_average", "date"]]
     df_heart_rate_avg = pd.DataFrame(heart_rate_avg).dropna()
-    hr_dict = df_heart_rate_avg.to_dict(orient='index')
-    hr_avg = ref.child('heartRate_avg')
-    hr_avg.set(hr_dict)
+    hr_dict = {str(k): v for k, v in df_heart_rate_avg.to_dict(orient='index').items()}
+    r.table('users').get(email).update({'heartRate_avg': hr_dict}).run(conn)
 
     # ECG LIST
     url_list = 'https://wbsapi.withings.net/v2/heart'
@@ -229,24 +234,19 @@ def fetch_and_store_user_data(email, access_token):
             columns={'ecg.signalid': 'signalId', 'timestamp': 'date', 'ecg.afib': 'afib',
                      'heart_rate.value': 'heart_rate'}).dropna()
 
-        # Split data into smaller chunks
-        chunk_size = 5  # Adjust chunk size if necessary
-        for start in range(0, len(df_ECG_record), chunk_size):
-            chunk = df_ECG_record[start:start + chunk_size]
-            ECG_dict = chunk.to_dict(orient='records')
-            ECG = ref.child('ECG').child(str(start))
-            ECG.set(ECG_dict)
+        ECG_dict = df_ECG_record.to_dict(orient='records')
+        r.table('users').get(email).update({'ECG': ECG_dict}).run(conn)
     else:
         print(f"Error for ECGLIST API: {response_list.status_code}")
         print(response_list.text)
 
+
 def job():
-    users_ref = db.reference('/users')
-    users = users_ref.get()
-    if users:
-        for email, user_data in users.items():
-            print(f"Fetching data for {email}")
-            fetch_withings_data(email)
+    users = r.table('users').run(conn)
+    for user in users:
+        email = user['id']
+        print(f"Fetching data for {email}")
+        fetch_withings_data(email)
 
 # Schedule the job to run every 2 minutes
 schedule.every(1).minutes.do(job)
