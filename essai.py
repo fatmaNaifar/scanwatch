@@ -7,7 +7,11 @@ import schedule
 import time
 from rethinkdb import RethinkDB
 r = RethinkDB()
+import os
 
+# Fetching connection details from environment variables
+RETHINKDB_HOST = os.getenv('RETHINKDB_HOST', 'localhost')
+RETHINKDB_PORT = int(os.getenv('RETHINKDB_PORT', 28015))
 # Withings API credentials
 CLIENT_ID = '36eff5960dbee78d215040ff5cdc737edc2c6f6a8e12e6e24a6a699258be466d'
 CLIENT_SECRET = 'f57f5bf2b8052719bc691b78d9d23631b9ddcce2b41d2f133daf62b64cd4182a'
