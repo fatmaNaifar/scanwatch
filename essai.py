@@ -19,8 +19,8 @@ REDIRECT_URI = 'http://localhost:3200'
 STATE = '11136964'
 
 # Connect to RethinkDB
-conn = r.connect(host='localhost',
-                 port=28015,
+conn = r.connect(host=RETHINKDB_HOST,
+                 port=RETHINKDB_PORT,
                  db='healthy')
 app = Flask(__name__)
 withings_api = None

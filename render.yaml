@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: data-collection
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn essai:app
+    envVars:
+      - key: RETHINKDB_HOST
+        value: 'localhost'
+      - key: RETHINKDB_PORT
+        value: 28015
+      - key: CLIENT_ID
+        value: '36eff5960dbee78d215040ff5cdc737edc2c6f6a8e12e6e24a6a699258be466d'
+      - key: CLIENT_SECRET
+        value: 'f57f5bf2b8052719bc691b78d9d23631b9ddcce2b41d2f133daf62b64cd4182a'
+      - key: REDIRECT_URI
+        value: 'http://localhost:3200'
+      - key: STATE
+        value: '11136964'
