@@ -10,13 +10,13 @@ r = RethinkDB()
 import os
 
 # Fetching connection details from environment variables
-RETHINKDB_HOST = os.getenv('RETHINKDB_HOST', 'localhost')
+RETHINKDB_HOST = os.getenv('RETHINKDB_HOST', '127.0.0.1')
 RETHINKDB_PORT = int(os.getenv('RETHINKDB_PORT', 28015))
 # Withings API credentials
-CLIENT_ID = '36eff5960dbee78d215040ff5cdc737edc2c6f6a8e12e6e24a6a699258be466d'
-CLIENT_SECRET = 'f57f5bf2b8052719bc691b78d9d23631b9ddcce2b41d2f133daf62b64cd4182a'
-REDIRECT_URI = 'http://localhost:3200'
-STATE = '11136964'
+CLIENT_ID = os.getenv('CLIENT_ID', '36eff5960dbee78d215040ff5cdc737edc2c6f6a8e12e6e24a6a699258be466d')
+CLIENT_SECRET = os.getenv('CLIENT_SECRET', 'f57f5bf2b8052719bc691b78d9d23631b9ddcce2b41d2f133daf62b64cd4182a')
+REDIRECT_URI = os.getenv('REDIRECT_URI', 'http://localhost:3200')
+STATE = os.getenv('STATE', '11136964')
 
 # Connect to RethinkDB
 conn = r.connect(host=RETHINKDB_HOST,
