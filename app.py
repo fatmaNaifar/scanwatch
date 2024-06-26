@@ -13,8 +13,8 @@ import os
 RETHINKDB_HOST = os.getenv('RETHINKDB_HOST', '127.0.0.1')
 RETHINKDB_PORT = int(os.getenv('RETHINKDB_PORT', 28015))
 # Withings API credentials
-CLIENT_ID = os.getenv('CLIENT_ID', '36eff5960dbee78d215040ff5cdc737edc2c6f6a8e12e6e24a6a699258be466d')
-CLIENT_SECRET = os.getenv('CLIENT_SECRET', 'f57f5bf2b8052719bc691b78d9d23631b9ddcce2b41d2f133daf62b64cd4182a')
+CLIENT_ID = os.getenv('CLIENT_ID', '90b48346560e626b893d0fdedde85c5ee2cd3108950ccd627596e47370fcc4e0')
+CLIENT_SECRET = os.getenv('CLIENT_SECRET', '0384ba31da0d0c6057f902597fc98ba8fb5d7accb0908a6a019e8f3f56f3f715')
 REDIRECT_URI = os.getenv('REDIRECT_URI', 'http://localhost:3200')
 STATE = os.getenv('STATE', '11136964')
 
@@ -264,4 +264,4 @@ if __name__ == '__main__':
     withings_api = WithingsAPI()
     port = int(os.getenv('PORT', 3200))  # Default to 3200 for local development
     host = os.getenv('HOST', '0.0.0.0')  # Default to '0.0.0.0' for accessibility in Docker and most cloud platforms
-    app.run(host='localhost', port=port, debug=True)
+    app.run(host=host, port=port, debug=True)
