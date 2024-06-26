@@ -78,16 +78,13 @@ class WithingsAPI:
             'client_id': self.client_id,
             'client_secret': self.client_secret,
             'grant_type': 'refresh_token',
-            'refresh_token': self.refresh_token,
-        }
+            'refresh_token': self.refresh_token,}
+
         response = requests.post(url, headers=headers, data=data)
         if response.status_code == 200:
             data = response.json()
-            if 'body' in data:
-                self.access_token = data['body']['access_token']
-                self.expires_in = datetime.utcnow().timestamp() + data['body']['expires_in']
-            else:
-                raise Exception(f"Error: No 'body' in response - {data}")
+            self.access_token = data['body']['access_token']
+            self.expires_in = datetime.utcnow().timestamp() + data['body']['expires_in']
         else:
             raise Exception(f"Error: {response.status_code} - {response.text}")
 
@@ -265,4 +262,6 @@ threading.Thread(target=scheduler_thread).start()
 
 if __name__ == '__main__':
     withings_api = WithingsAPI()
-    app.run(port=3200, debug=True)
+    port = int(os.getenv('PORT', 3200))  # Default to 3200 for local development
+    host = os.getenv('HOST', '0.0.0.0')  # Default to '0.0.0.0' for accessibility in Docker and most cloud platforms
+    app.run(host='localhost', port=port, debug=True)
